@@ -11,7 +11,7 @@ Shader "Example/URPReconstructWorldPos"
     {
         // SubShader Tags define when and under which conditions a SubShader block or
         // a pass is executed.
-        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
+        Tags { "RenderType" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
 
         Pass
         {

@@ -16,7 +16,6 @@ public static class MeshCombinationAndTextureComp
 
         // ── Shader name constants ───────────────────────────────────────────
         private const string ShaderBase = "Custom/TransparentWithDepthColor";
-        // private const string ShaderDepthColor = "Custom/TransparentWithDepthColor";
 
         private Dictionary<Texture2D, Color> textureAverageCache = new Dictionary<Texture2D, Color>();
         private Dictionary<MaterialKey, Material> simplifiedMaterialCache = new Dictionary<MaterialKey, Material>();
@@ -46,12 +45,6 @@ public static class MeshCombinationAndTextureComp
         }
 
         // ── Material-mode switch ────────────────────────────────────────────
-
-        /// <summary>
-        /// Pass true  → switch all combined renderers to TransparentWithDepthColor.
-        /// Pass false → switch back to TransparentWithDepth (normal mode).
-        /// Safe to call at any time after optimization has run.
-        /// </summary>
         public void SetDepthColorMode(bool enabled)
         {
             int switched = 0;
@@ -59,7 +52,6 @@ public static class MeshCombinationAndTextureComp
             {
                 if (mr == null) continue;
 
-                // No shader swap needed — just set the float
                 foreach (Material mat in mr.materials)
                 {
                     if (mat == null) continue;
@@ -75,6 +67,7 @@ public static class MeshCombinationAndTextureComp
         //  Public entry points
         // ------------------------------------------------------------------
         public List<MeshRenderer> GetCombinedRenderers() => combinedRenderers;
+        
         public void ApplyOptimizations(GameObject model)
         {
             combinedRenderers.Clear();
@@ -90,6 +83,11 @@ public static class MeshCombinationAndTextureComp
                 Debug.Log("=== STARTING MESH COMBINING ===");
                 CombineMeshesByMaterial(model);
                 Debug.Log("=== MESH COMBINING COMPLETE ===");
+            }
+            else
+            {
+                // --- NEW: If not combining, populate the list with existing renderers ---
+                combinedRenderers.AddRange(model.GetComponentsInChildren<MeshRenderer>(false));
             }
 
             if (simplifyTexturesBySize && !simplifyBeforeCombining)
@@ -120,6 +118,8 @@ public static class MeshCombinationAndTextureComp
 
             if (doSimplifyBefore) totalSteps++;
             if (doCombine) totalSteps += 3;
+            else totalSteps++; // Add a step for gathering existing renderers
+            
             if (doSimplifyAfter) totalSteps++;
 
             if (totalSteps == 0) { onProgress?.Invoke(1f); return; }
@@ -142,6 +142,12 @@ public static class MeshCombinationAndTextureComp
                     onProgress?.Invoke(currentProgress + (p * combineWeight)));
                 currentProgress += combineWeight;
                 Debug.Log("=== MESH COMBINING COMPLETE ===");
+            }
+            else
+            {
+                // --- NEW: If not combining, populate the list with existing renderers ---
+                combinedRenderers.AddRange(model.GetComponentsInChildren<MeshRenderer>(false));
+                currentProgress += progressPerUnit;
             }
 
             if (doSimplifyAfter)
@@ -270,7 +276,6 @@ public static class MeshCombinationAndTextureComp
         {
             if (originalMaterial == null) return null;
 
-            // Always create with the base shader — SetDepthColorMode() swaps later
             Shader customShader = Shader.Find(ShaderBase);
             if (customShader == null)
             {
@@ -303,16 +308,13 @@ public static class MeshCombinationAndTextureComp
                 sourceColor = new Color(0.5f, 0.5f, 0.5f, 1f);
             }
 
-            // Exact cache hit
             MaterialKey key = new MaterialKey(customShader, sourceColor);
             if (simplifiedMaterialCache.ContainsKey(key))
                 return simplifiedMaterialCache[key];
 
-            // Near-colour merge
             Material similar = FindSimilarCachedMaterial(customShader, sourceColor);
             if (similar != null) return similar;
 
-            // New material
             Material newMat = new Material(customShader);
             newMat.name = $"Simplified_{ColorUtility.ToHtmlStringRGB(sourceColor)}";
             newMat.SetColor("_Color", sourceColor);

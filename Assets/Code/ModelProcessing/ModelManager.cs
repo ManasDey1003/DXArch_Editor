@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ModelManager : MonoBehaviour
@@ -34,8 +35,12 @@ public class ModelManager : MonoBehaviour
             if (shouldFilterMesh && _currentModel != null)
                 _currentModel = _meshFilteration.FilterSmallMeshes(_currentModel);
 
-            if (CombineMeshesAndTextures && _currentModel != null)
+            if (_currentModel != null)
+            {
+                // Always call this so we can extract the renderers for occlusion
+                // and apply depth colors, even if combination is false.
                 CombineMeshFunc();
+            }
         }
     }
 
@@ -43,6 +48,9 @@ public class ModelManager : MonoBehaviour
     {
         // Create once and persist on the class
         _optimizer = new MeshCombinationAndTextureComp.ModelOptimizer();
+        
+        // Pass the inspector toggle into the optimizer
+        _optimizer.combineMeshes = CombineMeshesAndTextures;
 
         await _optimizer.ApplyOptimizationsAsync(_currentModel, progress =>
         {
@@ -52,11 +60,16 @@ public class ModelManager : MonoBehaviour
         // Re-apply depth mode in case it was set before the model finished loading
         _optimizer.SetDepthColorMode(_depthColorMode);
 
-
-        // Wire up occlusion culling after combining is done
+        // --- NEW: Register with Occlusion Culling ---
         if (OcclusionCullingManager.Instance != null)
-            OcclusionCullingManager.Instance.RegisterRenderers(
-                _optimizer.GetCombinedRenderers());
+        {
+            List<MeshRenderer> finalRenderers = _optimizer.GetCombinedRenderers();
+            OcclusionCullingManager.Instance.RegisterRenderers(finalRenderers);
+        }
+        else
+        {
+            Debug.LogWarning("[ModelManager] OcclusionCullingManager Instance is missing.");
+        }
     }
 
     // ── Serialized settings ─────────────────────────────────────────────────

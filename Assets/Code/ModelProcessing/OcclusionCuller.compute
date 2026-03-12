@@ -1,22 +1,19 @@
 #pragma kernel CSMain
 
-StructuredBuffer<float3> _AABBMin;
-StructuredBuffer<float3> _AABBMax;
-Texture2D<float>         _CameraDepth;
-
-// A simple clamp sampler so we don't read outside the screen
-SamplerState sampler_CameraDepth; 
+StructuredBuffer<float3>  _AABBMin;
+StructuredBuffer<float3>  _AABBMax;
+Texture2D<float>          _CameraDepth;
 
 float4x4 _VP;
-float4 _FrustumPlanes[6];
-float2 _ScreenSize;
-int _Count;
+float4   _FrustumPlanes[6];
+float2   _ScreenSize;
+int      _Count;
+int      _IsReversedZ;
+int      _UVStartsAtTop;
+int      _DebugIndex;
 
-// Passed from C# to fix Unity's missing macros in Compute Shaders
-int _IsReversedZ;   
-int _UVStartsAtTop; 
-
-RWStructuredBuffer<int> _Visibility;
+RWStructuredBuffer<int>   _Visibility;
+RWStructuredBuffer<float> _DebugOut;   // 16 floats per object
 
 bool IsFrustumCulled(float3 bMin, float3 bMax)
 {
@@ -26,23 +23,20 @@ bool IsFrustumCulled(float3 bMin, float3 bMax)
         float3(bMin.x, bMin.y, bMax.z), float3(bMax.x, bMin.y, bMax.z),
         float3(bMin.x, bMax.y, bMax.z), float3(bMax.x, bMax.y, bMax.z)
     };
-
     for (int p = 0; p < 6; p++)
     {
         bool allOut = true;
         for (int c = 0; c < 8; c++)
         {
             if (dot(_FrustumPlanes[p].xyz, corners[c]) + _FrustumPlanes[p].w >= 0)
-            {
-                allOut = false; break;
-            }
+            { allOut = false; break; }
         }
         if (allOut) return true;
     }
     return false;
 }
 
-bool IsOccluded(float3 bMin, float3 bMax)
+bool IsOccluded(float3 bMin, float3 bMax, int objIndex)
 {
     float3 corners[8] = {
         float3(bMin.x, bMin.y, bMin.z), float3(bMax.x, bMin.y, bMin.z),
@@ -51,69 +45,87 @@ bool IsOccluded(float3 bMin, float3 bMax)
         float3(bMin.x, bMax.y, bMax.z), float3(bMax.x, bMax.y, bMax.z)
     };
 
-    float2 uvMin = 9999;
-    float2 uvMax = -9999;
-    
-    // Set baseline based on depth direction
-    float closestNDC = _IsReversedZ == 1 ? 0.0 : 1.0; 
+    float2 uvMin =  9999.0;
+    float2 uvMax = -9999.0;
+    float closestNDC = _IsReversedZ == 1 ? 0.0 : 1.0;
 
     for (int c = 0; c < 8; c++)
     {
         float4 clip = mul(_VP, float4(corners[c], 1.0));
-        
-        // FIX: If ANY corner is behind or touching the camera's near plane, 
-        // the object intersects the camera. Don't cull it!
         if (clip.w <= 0.0) return false;
 
         float3 ndc = clip.xyz / clip.w;
-        float2 uv = ndc.xy * 0.5 + 0.5;
-        
-        // FIX: Handle API specific upside-down UVs
+        float2 uv  = ndc.xy * 0.5 + 0.5;
         if (_UVStartsAtTop == 1) uv.y = 1.0 - uv.y;
 
         uvMin = min(uvMin, uv);
         uvMax = max(uvMax, uv);
 
-        // FIX: Properly find the point on the bounding box closest to the camera
         if (_IsReversedZ == 1)
-            closestNDC = max(closestNDC, ndc.z); // Reversed-Z: 1 is closest
+            closestNDC = max(closestNDC, ndc.z);
         else
-            closestNDC = min(closestNDC, ndc.z); // Standard-Z: 0 is closest
+            closestNDC = min(closestNDC, ndc.z);
     }
 
-    // Keep sample box on screen
     uvMin = clamp(uvMin, 0.0, 1.0);
     uvMax = clamp(uvMax, 0.0, 1.0);
 
+    if (uvMin.x >= uvMax.x || uvMin.y >= uvMax.y) return false;
+
+    // Write debug header
+    bool isDebug = (objIndex == _DebugIndex);
+    int  base_   = objIndex * 16;
+    if (isDebug)
+    {
+        _DebugOut[base_ + 0] = uvMin.x;
+        _DebugOut[base_ + 1] = uvMin.y;
+        _DebugOut[base_ + 2] = uvMax.x;
+        _DebugOut[base_ + 3] = uvMax.y;
+        _DebugOut[base_ + 4] = closestNDC;
+    }
+
     int occludedSamples = 0;
 
-    // THE CHEAP ROUTE: Sample a 3x3 grid (9 points) across the object's screen rectangle at mip 0
     for (int x = 0; x < 3; x++)
     {
         for (int y = 0; y < 3; y++)
         {
-            float2 sampleUV = lerp(uvMin, uvMax, float2(x / 2.0, y / 2.0));
-            
-            // Read directly from mip 0
-            float sceneDepth = _CameraDepth.SampleLevel(sampler_CameraDepth, sampleUV, 0).r;
+            float2 sampleUV = lerp(uvMin, uvMax, float2(x * 0.5, y * 0.5));
+            int2 pixel = int2(
+                clamp((int)(sampleUV.x * _ScreenSize.x), 0, (int)_ScreenSize.x - 1),
+                clamp((int)(sampleUV.y * _ScreenSize.y), 0, (int)_ScreenSize.y - 1)
+            );
 
-            // Check if scene geometry is closer than the object's closest point
+            float sceneDepth = _CameraDepth.Load(int3(pixel, 0));
+
+            if (isDebug) _DebugOut[base_ + 5 + x * 3 + y] = sceneDepth;
+
+            // Skip empty depth (skybox)
+            if (_IsReversedZ == 1 && sceneDepth <= 0.0001) continue;
+            if (_IsReversedZ == 0 && sceneDepth >= 0.9999) continue;
+
+            float bias = 0.002;
             if (_IsReversedZ == 1)
             {
-                if (sceneDepth > closestNDC) occludedSamples++;
+                if (sceneDepth > closestNDC + bias) occludedSamples++;
             }
             else
             {
-                if (sceneDepth < closestNDC) occludedSamples++;
+                if (sceneDepth < closestNDC - bias) occludedSamples++;
             }
         }
     }
 
-    // If all 9 sample points hit a wall/object that is closer than our object, it's occluded!
+    if (isDebug)
+    {
+        _DebugOut[base_ + 14] = (float)occludedSamples;
+        _DebugOut[base_ + 15] = (occludedSamples == 9) ? 1.0 : 0.0;
+    }
+
     return occludedSamples == 9;
 }
 
-[numthreads(64,1,1)]
+[numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
     uint i = id.x;
@@ -123,7 +135,8 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     float3 bMax = _AABBMax[i];
 
     if (IsFrustumCulled(bMin, bMax)) { _Visibility[i] = 0; return; }
-    if (IsOccluded(bMin, bMax))      { _Visibility[i] = 0; return; }
+    if (IsOccluded(bMin, bMax, (int)i)) { _Visibility[i] = 0; return; }
 
     _Visibility[i] = 1;
 }
+

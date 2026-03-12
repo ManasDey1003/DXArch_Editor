@@ -1,0 +1,12 @@
+#pragma kernel CopyDepth
+
+Texture2D<float>   _SourceDepth;
+RWTexture2D<float> _DestDepth;
+int2               _Size;
+
+[numthreads(8, 8, 1)]
+void CopyDepth(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Size.x || id.y >= (uint)_Size.y) return;
+    _DestDepth[id.xy] = _SourceDepth.Load(int3(id.xy, 0));
+}

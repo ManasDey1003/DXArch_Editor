@@ -620,7 +620,7 @@ Transform:
   m_GameObject: {fileID: 124991075}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 5.21}
+  m_LocalPosition: {x: 0, y: 2000, z: 5.21}
   m_LocalScale: {x: 0.099999994, y: 0.099999994, z: 0.099999994}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -1563,7 +1563,7 @@ MonoBehaviour:
   _currentModel: {fileID: 0}
   _depthColorMode: 0
   loadModelOnStart: 1
-  shouldFilterMesh: 0
+  shouldFilterMesh: 1
   CombineMeshesAndTextures: 1
 --- !u!114 &309840691
 MonoBehaviour:
@@ -1594,6 +1594,8 @@ MonoBehaviour:
   _enabled: 1
   _updateInterval: 0.05
   _debug: 0
+  _debugDepthRead: 0
+  _debugObjectIndex: 0
 --- !u!1 &317726327
 GameObject:
   m_ObjectHideFlags: 0
@@ -1637,6 +1639,7 @@ GameObject:
   - component: {fileID: 330585545}
   - component: {fileID: 330585544}
   - component: {fileID: 330585547}
+  - component: {fileID: 330585548}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1762,6 +1765,20 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!114 &330585548
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 330585543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b8aec8a5ab205148aa4d63698753bd3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  showDepthTexture: 1
+  toggleKey: 100
 --- !u!1 &351918273
 GameObject:
   m_ObjectHideFlags: 0
@@ -3959,7 +3976,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 22400762, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.000022888184
+      value: 0.0000076293945
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMax.x
@@ -5031,7 +5048,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  - {fileID: 2100000, guid: e629a538e5992c549beede89fced383d, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
