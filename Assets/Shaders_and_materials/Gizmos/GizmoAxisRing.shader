@@ -2,6 +2,7 @@ Shader "CustomShaders/NegativeAxisRing"
 {
    Properties
     {
+        _MainTex ("Texture", 2D) = "white" {}
         _FillColor ("Inner Fill Color", Color) = (1,1,1,0.2)
         _RingColor ("Ring Color", Color) = (1,1,1,1)
 

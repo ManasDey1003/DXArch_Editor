@@ -310,7 +310,7 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                 {
                     ""name"": ""negative"",
                     ""id"": ""c69c6205-af09-4ead-913a-6761970d4673"",
-                    ""path"": ""<Keyboard>/e"",
+                    ""path"": ""<Keyboard>/q"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -321,7 +321,7 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                 {
                     ""name"": ""positive"",
                     ""id"": ""f9395f2e-91fe-45a7-b7d6-ea729d601fe9"",
-                    ""path"": ""<Keyboard>/q"",
+                    ""path"": ""<Keyboard>/e"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
