@@ -7,10 +7,10 @@ public class DepthDebugDisplay : MonoBehaviour
 {
     public bool show = true;
     public float nearDisplay = 0.1f;
-    public float farDisplay  = 500f;
+    public float farDisplay = 500f;
 
     private Material _mat;
-    private Camera   _cam;
+    private Camera _cam;
 
     private const string ShaderSrc = @"
 Shader ""Hidden/DepthDebug""
@@ -45,11 +45,11 @@ Shader ""Hidden/DepthDebug""
 
     void Start()
     {
-        _cam = GetComponent<Camera>();
-        _cam.depthTextureMode = DepthTextureMode.Depth;
+        // _cam = GetComponent<Camera>();
+        // _cam.depthTextureMode = DepthTextureMode.Depth;
 
-        var shader = ShaderUtil.CreateShaderAsset(ShaderSrc, false);
-        _mat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+        // var shader = ShaderUtil.CreateShaderAsset(ShaderSrc, false);
+        // _mat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
     }
 
     void OnRenderImage(RenderTexture src, RenderTexture dst)
@@ -61,7 +61,7 @@ Shader ""Hidden/DepthDebug""
         }
 
         _mat.SetFloat("_Near", nearDisplay);
-        _mat.SetFloat("_Far",  farDisplay);
+        _mat.SetFloat("_Far", farDisplay);
         Graphics.Blit(src, dst, _mat);
     }
 }

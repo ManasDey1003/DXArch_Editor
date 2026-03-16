@@ -1506,6 +1506,7 @@ GameObject:
   - component: {fileID: 309840689}
   - component: {fileID: 309840691}
   - component: {fileID: 309840692}
+  - component: {fileID: 309840693}
   m_Layer: 0
   m_Name: ModelManager
   m_TagString: Untagged
@@ -1561,10 +1562,12 @@ MonoBehaviour:
   _importer: {fileID: 0}
   _meshFilteration: {fileID: 0}
   _currentModel: {fileID: 0}
+  _octreeBuilder: {fileID: 0}
   _depthColorMode: 0
-  loadModelOnStart: 1
-  shouldFilterMesh: 1
-  CombineMeshesAndTextures: 1
+  _loadModelOnStart: 1
+  _shouldFilterMesh: 1
+  _combineMeshesAndTextures: 1
+  _optimizeForOcclusionCulling: 0
 --- !u!114 &309840691
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1594,8 +1597,38 @@ MonoBehaviour:
   _enabled: 1
   _updateInterval: 0.05
   _debug: 0
-  _debugDepthRead: 0
-  _debugObjectIndex: 0
+--- !u!114 &309840693
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 309840687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65949db63c2a3ec4585a7109d797177f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _rootObject: {fileID: 0}
+  _maxDepth: 7
+  _minObjectsPerNode: 10
+  _minNodeSize: 5
+  _assignmentMode: 2
+  _preserveOriginalHierarchy: 0
+  _nodePrefix: Octree_
+  _autoRegisterCulling: 1
+  _enableAABBOcclusion: 1
+  _minOccluderScreenAreaPercent: 0.01
+  _depthBias: 0.01
+  _enableDistanceLimiter: 1
+  _forceRenderDistance: 10
+  _useCenter: 0
+  _showGizmos: 1
+  _leafNodeColor: {r: 0, g: 1, b: 0, a: 1}
+  _internalNodeColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  _debugAABBOcclusion: 1
+  _visualizeOccluders: 1
+  _visualizeForceRendered: 1
 --- !u!1 &317726327
 GameObject:
   m_ObjectHideFlags: 0
@@ -1733,7 +1766,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_RenderShadows: 1
+  m_RenderShadows: 0
   m_RequiresDepthTextureOption: 1
   m_RequiresOpaqueTextureOption: 1
   m_CameraType: 0
@@ -1777,8 +1810,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b8aec8a5ab205148aa4d63698753bd3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  showDepthTexture: 1
-  toggleKey: 100
+  show: 1
+  nearDisplay: 0.1
+  farDisplay: 500
 --- !u!1 &351918273
 GameObject:
   m_ObjectHideFlags: 0
@@ -3976,7 +4010,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 22400762, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.0000076293945
+      value: 0.000019073486
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMax.x
