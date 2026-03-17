@@ -14,10 +14,15 @@ public class FrustumCullingManager : MonoBehaviour
     [SerializeField] bool _enabled = true;
     [SerializeField] float _updateInterval = 0.05f;
     [SerializeField] bool _debug = false;
+    
+    [Header("Dynamic Bounds")]
+    [SerializeField] bool _updateBoundsEveryFrame = true;
+    [Tooltip("Only update bounds when objects have moved (optimization)")]
+    [SerializeField] bool _onlyUpdateIfMoved = false;
 
     private Camera _cam;
     private List<MeshRenderer> _renderers = new();
-    private HashSet<MeshRenderer> _frustumVisibleSet = new(); // NEW: Track frustum-visible renderers
+    private HashSet<MeshRenderer> _frustumVisibleSet = new();
     private int _count = 0;
     private bool _ready = false;
     private bool _pending = false;
@@ -31,6 +36,11 @@ public class FrustumCullingManager : MonoBehaviour
 
     private Vector3[] _aabbMin;
     private Vector3[] _aabbMax;
+    
+    // Track previous positions for movement detection
+    private Vector3[] _lastPositions;
+    private Quaternion[] _lastRotations;
+    private Vector3[] _lastScales;
 
     void Awake()
     {
@@ -55,6 +65,7 @@ public class FrustumCullingManager : MonoBehaviour
 
         if (_kernel < 0) { Debug.LogError("[FrustumCulling] CSMain kernel not found."); return; }
 
+        InitializeArrays();
         BakeAABBs();
         AllocateBuffers();
         _ready = true;
@@ -62,32 +73,84 @@ public class FrustumCullingManager : MonoBehaviour
         Debug.Log($"[FrustumCulling] Registered {_count} renderers. Kernel={_kernel}");
     }
 
-    /// <summary>
-    /// Check if a specific renderer is currently visible in frustum
-    /// </summary>
     public bool IsFrustumVisible(MeshRenderer renderer)
     {
         return _frustumVisibleSet.Contains(renderer);
     }
 
-    /// <summary>
-    /// Get all renderers that are currently frustum-visible
-    /// </summary>
     public HashSet<MeshRenderer> GetFrustumVisibleRenderers()
     {
         return _frustumVisibleSet;
     }
 
-    private void BakeAABBs()
+    private void InitializeArrays()
     {
         _aabbMin = new Vector3[_count];
         _aabbMax = new Vector3[_count];
+        
+        if (_onlyUpdateIfMoved)
+        {
+            _lastPositions = new Vector3[_count];
+            _lastRotations = new Quaternion[_count];
+            _lastScales = new Vector3[_count];
+        }
+    }
+
+    private void BakeAABBs()
+    {
         for (int i = 0; i < _count; i++)
         {
             if (_renderers[i] == null) continue;
+            
             Bounds b = _renderers[i].bounds;
             _aabbMin[i] = b.min;
             _aabbMax[i] = b.max;
+            
+            if (_onlyUpdateIfMoved)
+            {
+                Transform t = _renderers[i].transform;
+                _lastPositions[i] = t.position;
+                _lastRotations[i] = t.rotation;
+                _lastScales[i] = t.lossyScale;
+            }
+        }
+    }
+
+    private void UpdateBounds()
+    {
+        bool anyUpdated = false;
+        
+        for (int i = 0; i < _count; i++)
+        {
+            if (_renderers[i] == null) continue;
+            
+            // Check if object has moved (optimization)
+            if (_onlyUpdateIfMoved)
+            {
+                Transform t = _renderers[i].transform;
+                bool hasMoved = t.position != _lastPositions[i] ||
+                               t.rotation != _lastRotations[i] ||
+                               t.lossyScale != _lastScales[i];
+                
+                if (!hasMoved) continue;
+                
+                _lastPositions[i] = t.position;
+                _lastRotations[i] = t.rotation;
+                _lastScales[i] = t.lossyScale;
+            }
+            
+            // Update bounds
+            Bounds b = _renderers[i].bounds;
+            _aabbMin[i] = b.min;
+            _aabbMax[i] = b.max;
+            anyUpdated = true;
+        }
+        
+        // Upload to GPU if any bounds changed
+        if (anyUpdated)
+        {
+            _aabbMinBuf.SetData(_aabbMin);
+            _aabbMaxBuf.SetData(_aabbMax);
         }
     }
 
@@ -116,6 +179,13 @@ public class FrustumCullingManager : MonoBehaviour
         if (cam.cameraType != CameraType.Game) return;
         if (Time.time - _lastUpdate < _updateInterval) return;
         _lastUpdate = Time.time;
+        
+        // Update bounds if enabled
+        if (_updateBoundsEveryFrame)
+        {
+            UpdateBounds();
+        }
+        
         Dispatch();
     }
 
@@ -148,15 +218,13 @@ public class FrustumCullingManager : MonoBehaviour
 
         NativeArray<int> results = req.GetData<int>();
         _visible = 0; _culled = 0;
-        _frustumVisibleSet.Clear(); // Clear previous frame's data
+        _frustumVisibleSet.Clear();
 
         for (int i = 0; i < _count; i++)
         {
             if (i >= _renderers.Count || _renderers[i] == null) continue;
             bool vis = results[i] == 1;
             
-            // Only enable if frustum-visible
-            // AABB occlusion culling will disable some of these later
             if (vis)
             {
                 _renderers[i].enabled = true;
@@ -172,12 +240,6 @@ public class FrustumCullingManager : MonoBehaviour
 
         if (_debug)
             Debug.Log($"[FrustumCulling] Visible:{_visible}  Culled:{_culled}  Total:{_count}");
-
-        // Notify AABB occlusion system that frustum culling is done
-        if (OctreeHierarchyBuilder.Instance != null)
-        {
-            OctreeHierarchyBuilder.Instance.OnFrustumCullingComplete();
-        }
     }
 
     void OnDrawGizmosSelected()

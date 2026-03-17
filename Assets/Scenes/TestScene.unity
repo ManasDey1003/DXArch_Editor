@@ -1507,6 +1507,7 @@ GameObject:
   - component: {fileID: 309840691}
   - component: {fileID: 309840692}
   - component: {fileID: 309840693}
+  - component: {fileID: 309840694}
   m_Layer: 0
   m_Name: ModelManager
   m_TagString: Untagged
@@ -1563,11 +1564,12 @@ MonoBehaviour:
   _meshFilteration: {fileID: 0}
   _currentModel: {fileID: 0}
   _octreeBuilder: {fileID: 0}
+  _testExport: {fileID: 0}
   _depthColorMode: 0
   _loadModelOnStart: 1
   _shouldFilterMesh: 1
   _combineMeshesAndTextures: 1
-  _optimizeForOcclusionCulling: 0
+  _optimizeForOcclusionCulling: 1
 --- !u!114 &309840691
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1597,6 +1599,8 @@ MonoBehaviour:
   _enabled: 1
   _updateInterval: 0.05
   _debug: 0
+  _updateBoundsEveryFrame: 1
+  _onlyUpdateIfMoved: 0
 --- !u!114 &309840693
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1613,7 +1617,7 @@ MonoBehaviour:
   _maxDepth: 7
   _minObjectsPerNode: 10
   _minNodeSize: 5
-  _assignmentMode: 2
+  _assignmentMode: 0
   _preserveOriginalHierarchy: 0
   _nodePrefix: Octree_
   _autoRegisterCulling: 1
@@ -1629,6 +1633,20 @@ MonoBehaviour:
   _debugAABBOcclusion: 1
   _visualizeOccluders: 1
   _visualizeForceRendered: 1
+--- !u!114 &309840694
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 309840687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d56e73d3fa6d2ce4db6aac48975e7d21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  exportRoot: []
+  path: 
 --- !u!1 &317726327
 GameObject:
   m_ObjectHideFlags: 0
@@ -1672,7 +1690,6 @@ GameObject:
   - component: {fileID: 330585545}
   - component: {fileID: 330585544}
   - component: {fileID: 330585547}
-  - component: {fileID: 330585548}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1798,21 +1815,6 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
---- !u!114 &330585548
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8b8aec8a5ab205148aa4d63698753bd3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  show: 1
-  nearDisplay: 0.1
-  farDisplay: 500
 --- !u!1 &351918273
 GameObject:
   m_ObjectHideFlags: 0
@@ -4010,7 +4012,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 22400762, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.000019073486
+      value: 0.00005340576
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMax.x
@@ -4258,6 +4260,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 224619367409363176, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 224669170713768380, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 224757625655964314, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
+      propertyPath: m_AnchoredPosition.x
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 224856348943071238, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
@@ -6665,6 +6675,10 @@ MonoBehaviour:
   _flySpeed: 15
   _fastMultiplier: 5
   _virtualDistance: 6.83
+  _touchOrbitSpeed: 0.3
+  _touchPanSpeed: 0.01
+  _touchZoomSpeed: 0.02
+  _pinchZoomSensitivity: 0.01
 --- !u!4 &1410864907
 Transform:
   m_ObjectHideFlags: 0

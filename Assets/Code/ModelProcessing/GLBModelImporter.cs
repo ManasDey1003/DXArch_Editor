@@ -1,8 +1,9 @@
 using UnityEngine;
-using UnityEngine.Networking;
+// using UnityEngine.Networking;
 using SimpleFileBrowser;
 using System.Collections;
 using System.IO;
+using UnityEngine.Android;
 
 /// <summary>
 /// Unity script to import GLB models using SimpleFileBrowser asset
@@ -39,6 +40,26 @@ public class GLBModelImporter : MonoBehaviour
         // If no parent is set, use this transform
         if (modelParent == null)
             modelParent = transform;
+
+#if UNITY_ANDROID
+        RequestAndroidPermissions();
+#endif
+    }
+
+    /// <summary>
+    /// Request Android storage permissions
+    /// </summary>
+    private void RequestAndroidPermissions()
+    {
+        if (!Permission.HasUserAuthorizedPermission(Permission.ExternalStorageRead))
+        {
+            Permission.RequestUserPermission(Permission.ExternalStorageRead);
+        }
+
+        if (!Permission.HasUserAuthorizedPermission(Permission.ExternalStorageWrite))
+        {
+            Permission.RequestUserPermission(Permission.ExternalStorageWrite);
+        }
     }
 
     /// <summary>
@@ -69,17 +90,73 @@ public class GLBModelImporter : MonoBehaviour
             string filePath = FileBrowser.Result[0];
             Debug.Log("Selected file: " + filePath);
 
-            // Load the model using async if GLTFast is available
-            // #if USING_GLTFAST
+#if UNITY_ANDROID
+            // Handle Android content URIs
+            if (filePath.StartsWith("content://"))
+            {
+                Debug.Log("Android content URI detected, copying file...");
+                StartCoroutine(HandleAndroidContentUri(filePath));
+            }
+            else
+            {
+                LoadGLBModelAsync(filePath);
+            }
+#else
             LoadGLBModelAsync(filePath);
-            // #else
-            // StartCoroutine(LoadGLBModelCoroutine(filePath));
-            // #endif
+#endif
         }
         else
         {
             Debug.Log("File selection cancelled");
             UpdateLoadingText("");
+        }
+    }
+
+    /// <summary>
+    /// Handles Android content URIs by copying the file to cache
+    /// </summary>
+    IEnumerator HandleAndroidContentUri(string contentUri)
+    {
+        UpdateLoadingText("Copying file...");
+        UpdateProgress(0.1f);
+
+        byte[] fileData = null;
+        try
+        {
+            fileData = FileBrowserHelpers.ReadBytesFromFile(contentUri);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to read file: {e.Message}");
+            UpdateLoadingText($"Error: {e.Message}");
+            yield break;
+        }
+
+        if (fileData == null || fileData.Length == 0)
+        {
+            Debug.LogError("File data is empty or null");
+            UpdateLoadingText("Error: File is empty");
+            yield break;
+        }
+
+        Debug.Log($"Read {fileData.Length} bytes from content URI");
+
+        string fileName = "glbModel_" + System.DateTime.Now.Ticks + ".glb";
+        string cachePath = Path.Combine(Application.persistentDataPath, fileName);
+
+        try
+        {
+            File.WriteAllBytes(cachePath, fileData);
+            Debug.Log($"File copied to: {cachePath}");
+            UpdateProgress(0.2f);
+            
+            // Load from cached path
+            LoadGLBModelAsync(cachePath);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to write file to cache: {e.Message}");
+            UpdateLoadingText($"Error: {e.Message}");
         }
     }
 
@@ -99,7 +176,7 @@ public class GLBModelImporter : MonoBehaviour
         }
 
         UpdateLoadingText("Loading model...");
-        UpdateProgress(0.1f);
+        UpdateProgress(0.3f);
 
         if (currentModel != null)
         {
@@ -117,7 +194,7 @@ public class GLBModelImporter : MonoBehaviour
                 AnisotropicFilterLevel = 3
             };
 
-            UpdateProgress(0.3f);
+            UpdateProgress(0.4f);
 
             bool success = await gltf.Load(filePath, importSettings);
             UpdateProgress(0.6f);

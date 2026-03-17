@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public class ModelManager : MonoBehaviour
 {
@@ -9,6 +12,7 @@ public class ModelManager : MonoBehaviour
     [SerializeField] MeshFilteration _meshFilteration;
     [SerializeField] GameObject _currentModel;
     [SerializeField] OctreeHierarchyBuilder _octreeBuilder;
+    [SerializeField] TestExport _testExport;
 
 
     // ── Depth color toggle ──────────────────────────────────────────────────
@@ -21,6 +25,7 @@ public class ModelManager : MonoBehaviour
     [SerializeField] bool _optimizeForOcclusionCulling = true;
     
     private MeshCombinationAndTextureComp.ModelOptimizer _optimizer;
+    private string _originalModelName;
 
     // Persisted so SetDepthColorMode() can be called on it later
     public bool DepthColorMode
@@ -40,6 +45,12 @@ public class ModelManager : MonoBehaviour
         set
         {
             _currentModel = value;
+
+            // Store the original model name when it's first set
+            if (_currentModel != null && string.IsNullOrEmpty(_originalModelName))
+            {
+                _originalModelName = _currentModel.name;
+            }
 
             if (_shouldFilterMesh && _currentModel != null)
                 _currentModel = _meshFilteration.FilterSmallMeshes(_currentModel);
@@ -113,6 +124,90 @@ public class ModelManager : MonoBehaviour
         }
     }
 
+    // ── Export functionality ────────────────────────────────────────────────
+    [ContextMenu("Export Model")]
+    public void ExportModel()
+    {
+        if (_currentModel == null)
+        {
+            Debug.LogError("[ModelManager] No model loaded to export.");
+            return;
+        }
+
+        if (_testExport == null)
+        {
+            Debug.LogError("[ModelManager] TestExport reference is missing. Assign it in the inspector.");
+            return;
+        }
+
+        string exportPath = OpenSaveFileDialog();
+        
+        if (string.IsNullOrEmpty(exportPath))
+        {
+            Debug.Log("[ModelManager] Export cancelled by user.");
+            return;
+        }
+
+        // Configure TestExport
+        _testExport.exportRoot = new GameObject[] { _currentModel };
+        _testExport.path = exportPath;
+
+        // Trigger export
+        _testExport.AdvancedExport();
+        
+        Debug.Log($"[ModelManager] Initiated export of '{_currentModel.name}' to: {exportPath}");
+    }
+
+    private string OpenSaveFileDialog()
+    {
+#if UNITY_EDITOR
+        string defaultName = !string.IsNullOrEmpty(_originalModelName) 
+            ? _originalModelName 
+            : "exported_model";
+        
+        // Remove any file extension from the default name
+        defaultName = System.IO.Path.GetFileNameWithoutExtension(defaultName);
+        
+        string path = EditorUtility.SaveFilePanel(
+            "Export Model as GLB",
+            "",
+            defaultName + ".glb",
+            "glb"
+        );
+        
+        return path;
+#else
+        // For runtime builds, you'll need a runtime file browser solution
+        Debug.LogWarning("[ModelManager] File browser only works in editor. Exporting to default path.");
+        string defaultName = !string.IsNullOrEmpty(_originalModelName) 
+            ? _originalModelName 
+            : "exported_model";
+        return Application.persistentDataPath + "/" + defaultName + ".glb";
+#endif
+    }
+
+    // Public method to be called from UI or other scripts
+    public void ExportModelToPath(string path)
+    {
+        if (_currentModel == null)
+        {
+            Debug.LogError("[ModelManager] No model loaded to export.");
+            return;
+        }
+
+        if (_testExport == null)
+        {
+            Debug.LogError("[ModelManager] TestExport reference is missing.");
+            return;
+        }
+
+        _testExport.exportRoot = new GameObject[] { _currentModel };
+        _testExport.path = path;
+        _testExport.AdvancedExport();
+        
+        Debug.Log($"[ModelManager] Exported '{_currentModel.name}' to: {path}");
+    }
+
     // ── Unity lifecycle ─────────────────────────────────────────────────────
     void Awake()
     {
@@ -122,6 +217,7 @@ public class ModelManager : MonoBehaviour
         _importer = GetComponent<GLBModelImporter>();
         _meshFilteration = GetComponent<MeshFilteration>();
         _octreeBuilder = GetComponent<OctreeHierarchyBuilder>();
+        _testExport = GetComponent<TestExport>();
     }
 
     void Start()

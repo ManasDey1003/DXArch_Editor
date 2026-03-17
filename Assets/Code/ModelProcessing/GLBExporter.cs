@@ -6,11 +6,9 @@ using System.Collections.Generic;
 
 public class TestExport : MonoBehaviour
 {
-    [SerializeField]
+    // Made public so ModelManager can set these
     public GameObject[] exportRoot;
-
-    [SerializeField]
-    string path;
+    public string path;
 
     // Temporary clones so original scene is untouched
     private List<GameObject> tempObjects = new();
@@ -18,6 +16,18 @@ public class TestExport : MonoBehaviour
     [ContextMenu("Export POSITION ONLY GLB")]
     public async void AdvancedExport()
     {
+        if (exportRoot == null || exportRoot.Length == 0)
+        {
+            Debug.LogError("[TestExport] No export root objects assigned.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(path))
+        {
+            Debug.LogError("[TestExport] Export path is not set.");
+            return;
+        }
+
         var logger = new CollectingLogger();
 
         tempObjects.Clear();
@@ -27,6 +37,8 @@ public class TestExport : MonoBehaviour
         // --------------------------------------------------
         foreach (var root in exportRoot)
         {
+            if (root == null) continue;
+
             var clone = Instantiate(root);
             clone.name = root.name;
             PrepareMeshes(clone);
@@ -72,12 +84,12 @@ public class TestExport : MonoBehaviour
 
         if (!success)
         {
-            Debug.LogError("GLB export failed");
+            Debug.LogError("[TestExport] GLB export failed");
             logger.LogAll();
         }
         else
         {
-            Debug.Log("POSITION ONLY GLB exported successfully");
+            Debug.Log($"[TestExport] POSITION ONLY GLB exported successfully to: {path}");
         }
     }
 

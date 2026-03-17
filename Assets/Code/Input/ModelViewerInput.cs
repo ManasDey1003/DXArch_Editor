@@ -172,6 +172,33 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""TouchCount"",
+                    ""type"": ""Value"",
+                    ""id"": ""f27f08ca-f33d-412c-b8c9-4848c7e1505f"",
+                    ""expectedControlType"": ""Integer"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""Touch0Position"",
+                    ""type"": ""Value"",
+                    ""id"": ""e4aed34c-b2db-4e83-98a5-cbef4611020f"",
+                    ""expectedControlType"": ""Vector2"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
+                },
+                {
+                    ""name"": ""Touch1Position"",
+                    ""type"": ""Value"",
+                    ""id"": ""e4da1faf-0b96-40e3-81f8-dd2bcd2f2df8"",
+                    ""expectedControlType"": ""Vector2"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": true
                 }
             ],
             ""bindings"": [
@@ -179,6 +206,17 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                     ""name"": """",
                     ""id"": ""581274dd-24f7-4cdd-8d33-c6902a59d94a"",
                     ""path"": ""<Mouse>/delta"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Look"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""219e55a2-99a8-44ab-9b48-d39ebe00b770"",
+                    ""path"": ""<Touchscreen>/touch0/delta"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -199,8 +237,30 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""bad0db79-cc83-4c05-abd4-6b4dca78289e"",
+                    ""path"": """",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Pan"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""e1c9bec7-285b-4004-8e89-7fd638c9be3e"",
                     ""path"": ""<Mouse>/rightButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""OrbitBtn"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""306f1ee5-1fcf-42f9-9bff-0c16a663bf3e"",
+                    ""path"": ""<Touchscreen>/Press"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
@@ -339,6 +399,39 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                     ""action"": ""Focus"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""185d7956-6ae5-4dc7-99d5-f1e25104982a"",
+                    ""path"": ""<Touchscreen>/primaryTouch/tapCount"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""TouchCount"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""217eea6d-0f1a-4897-a726-721589551d57"",
+                    ""path"": ""<Touchscreen>/touch0/position"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Touch0Position"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""90584e88-2430-4007-a0e6-3fa1204bda1e"",
+                    ""path"": ""<Touchscreen>/touch1/position"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Touch1Position"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         },
@@ -379,6 +472,17 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
                 },
                 {
                     ""name"": """",
+                    ""id"": ""1f2fea24-8a38-429f-8e6b-77829dc9090d"",
+                    ""path"": ""<Touchscreen>/primaryTouch/tap"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""MouseLeft"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
                     ""id"": ""c12c41cf-816e-4391-9156-8b4dbf90a548"",
                     ""path"": ""<Keyboard>/leftCtrl"",
                     ""interactions"": """",
@@ -404,6 +508,9 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
         m_Camera_FastMove = m_Camera.FindAction("FastMove", throwIfNotFound: true);
         m_Camera_Vertical = m_Camera.FindAction("Vertical", throwIfNotFound: true);
         m_Camera_Focus = m_Camera.FindAction("Focus", throwIfNotFound: true);
+        m_Camera_TouchCount = m_Camera.FindAction("TouchCount", throwIfNotFound: true);
+        m_Camera_Touch0Position = m_Camera.FindAction("Touch0Position", throwIfNotFound: true);
+        m_Camera_Touch1Position = m_Camera.FindAction("Touch1Position", throwIfNotFound: true);
         // BasicInput
         m_BasicInput = asset.FindActionMap("BasicInput", throwIfNotFound: true);
         m_BasicInput_MouseLeft = m_BasicInput.FindAction("MouseLeft", throwIfNotFound: true);
@@ -498,6 +605,9 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
     private readonly InputAction m_Camera_FastMove;
     private readonly InputAction m_Camera_Vertical;
     private readonly InputAction m_Camera_Focus;
+    private readonly InputAction m_Camera_TouchCount;
+    private readonly InputAction m_Camera_Touch0Position;
+    private readonly InputAction m_Camera_Touch1Position;
     /// <summary>
     /// Provides access to input actions defined in input action map "Camera".
     /// </summary>
@@ -545,6 +655,18 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Camera/Focus".
         /// </summary>
         public InputAction @Focus => m_Wrapper.m_Camera_Focus;
+        /// <summary>
+        /// Provides access to the underlying input action "Camera/TouchCount".
+        /// </summary>
+        public InputAction @TouchCount => m_Wrapper.m_Camera_TouchCount;
+        /// <summary>
+        /// Provides access to the underlying input action "Camera/Touch0Position".
+        /// </summary>
+        public InputAction @Touch0Position => m_Wrapper.m_Camera_Touch0Position;
+        /// <summary>
+        /// Provides access to the underlying input action "Camera/Touch1Position".
+        /// </summary>
+        public InputAction @Touch1Position => m_Wrapper.m_Camera_Touch1Position;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -598,6 +720,15 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
             @Focus.started += instance.OnFocus;
             @Focus.performed += instance.OnFocus;
             @Focus.canceled += instance.OnFocus;
+            @TouchCount.started += instance.OnTouchCount;
+            @TouchCount.performed += instance.OnTouchCount;
+            @TouchCount.canceled += instance.OnTouchCount;
+            @Touch0Position.started += instance.OnTouch0Position;
+            @Touch0Position.performed += instance.OnTouch0Position;
+            @Touch0Position.canceled += instance.OnTouch0Position;
+            @Touch1Position.started += instance.OnTouch1Position;
+            @Touch1Position.performed += instance.OnTouch1Position;
+            @Touch1Position.canceled += instance.OnTouch1Position;
         }
 
         /// <summary>
@@ -636,6 +767,15 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
             @Focus.started -= instance.OnFocus;
             @Focus.performed -= instance.OnFocus;
             @Focus.canceled -= instance.OnFocus;
+            @TouchCount.started -= instance.OnTouchCount;
+            @TouchCount.performed -= instance.OnTouchCount;
+            @TouchCount.canceled -= instance.OnTouchCount;
+            @Touch0Position.started -= instance.OnTouch0Position;
+            @Touch0Position.performed -= instance.OnTouch0Position;
+            @Touch0Position.canceled -= instance.OnTouch0Position;
+            @Touch1Position.started -= instance.OnTouch1Position;
+            @Touch1Position.performed -= instance.OnTouch1Position;
+            @Touch1Position.canceled -= instance.OnTouch1Position;
         }
 
         /// <summary>
@@ -846,6 +986,27 @@ public partial class @ModelViewerInput: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnFocus(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "TouchCount" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnTouchCount(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Touch0Position" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnTouch0Position(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Touch1Position" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnTouch1Position(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "BasicInput" which allows adding and removing callbacks.
