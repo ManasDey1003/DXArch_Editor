@@ -1508,6 +1508,7 @@ GameObject:
   - component: {fileID: 309840692}
   - component: {fileID: 309840693}
   - component: {fileID: 309840694}
+  - component: {fileID: 309840695}
   m_Layer: 0
   m_Name: ModelManager
   m_TagString: Untagged
@@ -1569,7 +1570,8 @@ MonoBehaviour:
   _loadModelOnStart: 1
   _shouldFilterMesh: 1
   _combineMeshesAndTextures: 1
-  _optimizeForOcclusionCulling: 1
+  _optimizeForOcclusionCulling: 0
+  _enableOcclusionCulling: 1
 --- !u!114 &309840691
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1601,6 +1603,12 @@ MonoBehaviour:
   _debug: 0
   _updateBoundsEveryFrame: 1
   _onlyUpdateIfMoved: 0
+  _enableAngularSizeCulling: 1
+  _minPixelArea: 5
+  _useFastApproximation: 1
+  _angularCullExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
 --- !u!114 &309840693
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1608,7 +1616,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 309840687}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 65949db63c2a3ec4585a7109d797177f, type: 3}
   m_Name: 
@@ -1647,6 +1655,29 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   exportRoot: []
   path: 
+--- !u!114 &309840695
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 309840687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fab5f03d715cadc46a2d27ff2e2bb868, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _objectIDShader: {fileID: 4800000, guid: 768b4ff38a388224eafe3e3333e3d8c4, type: 3}
+  _mainCamera: {fileID: 330585545}
+  _enabled: 1
+  _idBufferResolution: 256
+  _updateInterval: 0.1
+  _debug: 1
+  _useHysteresis: 1
+  _framesBeforeCulling: -65
+  _totalObjects: 0
+  _visibleAfterOcclusion: 0
+  _occlusionCulled: 0
 --- !u!1 &317726327
 GameObject:
   m_ObjectHideFlags: 0
@@ -4012,7 +4043,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 22400762, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0.00005340576
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMax.x

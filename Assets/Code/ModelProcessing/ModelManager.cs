@@ -23,7 +23,8 @@ public class ModelManager : MonoBehaviour
     [SerializeField] bool _shouldFilterMesh = true;
     [SerializeField] bool _combineMeshesAndTextures = true;
     [SerializeField] bool _optimizeForOcclusionCulling = true;
-    
+    [SerializeField]private bool _enableOcclusionCulling = true;
+
     private MeshCombinationAndTextureComp.ModelOptimizer _optimizer;
     private string _originalModelName;
 
@@ -83,11 +84,11 @@ public class ModelManager : MonoBehaviour
         RebuildHierarchy();
 
     }
-    
+
     private void RebuildHierarchy()
     {
         if (_currentModel == null) return;
-        
+
         if (_optimizeForOcclusionCulling)
         {
             // Build octree hierarchy
@@ -95,31 +96,31 @@ public class ModelManager : MonoBehaviour
             {
                 _octreeBuilder.RootModel = _currentModel;
                 _octreeBuilder.BuildOctreeHierarchy();
-                
-                // Octree builder will auto-register with FrustumCullingManager
-                // if _autoRegisterCulling is enabled in its inspector
-                Debug.Log("[ModelManager] Octree built. Frustum culling registration handled by OctreeHierarchyBuilder.");
+
+                Debug.Log("[ModelManager] Octree built.");
             }
             else
             {
                 Debug.LogWarning("[ModelManager] OctreeHierarchyBuilder reference is missing.");
             }
         }
-        else
+
+        // Register renderers with culling systems
+        List<MeshRenderer> renderers = _optimizer?.GetCombinedRenderers();
+        if (renderers != null && renderers.Count > 0)
         {
-            // No octree - register optimizer renderers directly with frustum culling
+            // Register with frustum culling
             if (FrustumCullingManager.Instance != null)
             {
-                List<MeshRenderer> renderers = _optimizer?.GetCombinedRenderers();
-                if (renderers != null && renderers.Count > 0)
-                {
-                    FrustumCullingManager.Instance.RegisterRenderers(renderers);
-                    Debug.Log($"[ModelManager] Registered {renderers.Count} renderers with FrustumCullingManager (no octree).");
-                }
+                FrustumCullingManager.Instance.RegisterRenderers(renderers);
+                Debug.Log($"[ModelManager] Registered {renderers.Count} renderers with FrustumCullingManager.");
             }
-            else
+
+            // Register with occlusion culling
+            if (_enableOcclusionCulling && OcclusionCullingManager.Instance != null)
             {
-                Debug.LogWarning("[ModelManager] FrustumCullingManager Instance is missing.");
+                OcclusionCullingManager.Instance.RegisterRenderers(renderers);
+                Debug.Log($"[ModelManager] Registered {renderers.Count} renderers with OcclusionCullingManager.");
             }
         }
     }
@@ -141,7 +142,7 @@ public class ModelManager : MonoBehaviour
         }
 
         string exportPath = OpenSaveFileDialog();
-        
+
         if (string.IsNullOrEmpty(exportPath))
         {
             Debug.Log("[ModelManager] Export cancelled by user.");
@@ -154,27 +155,27 @@ public class ModelManager : MonoBehaviour
 
         // Trigger export
         _testExport.AdvancedExport();
-        
+
         Debug.Log($"[ModelManager] Initiated export of '{_currentModel.name}' to: {exportPath}");
     }
 
     private string OpenSaveFileDialog()
     {
 #if UNITY_EDITOR
-        string defaultName = !string.IsNullOrEmpty(_originalModelName) 
-            ? _originalModelName 
+        string defaultName = !string.IsNullOrEmpty(_originalModelName)
+            ? _originalModelName
             : "exported_model";
-        
+
         // Remove any file extension from the default name
         defaultName = System.IO.Path.GetFileNameWithoutExtension(defaultName);
-        
+
         string path = EditorUtility.SaveFilePanel(
             "Export Model as GLB",
             "",
             defaultName + ".glb",
             "glb"
         );
-        
+
         return path;
 #else
         // For runtime builds, you'll need a runtime file browser solution
@@ -204,7 +205,7 @@ public class ModelManager : MonoBehaviour
         _testExport.exportRoot = new GameObject[] { _currentModel };
         _testExport.path = path;
         _testExport.AdvancedExport();
-        
+
         Debug.Log($"[ModelManager] Exported '{_currentModel.name}' to: {path}");
     }
 

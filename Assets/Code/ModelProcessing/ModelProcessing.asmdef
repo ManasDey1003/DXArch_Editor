@@ -1,0 +1,19 @@
+{
+    "name": "ModelProcessing",
+    "rootNamespace": "",
+    "references": [
+        "GUID:a42927d1d4a3b4cda9b076a7adecb9cc",
+        "GUID:5e7ba8d6d26c84943b64dd07bd1c9510",
+        "GUID:c685d05731421f64287ad6d13be5af0e",
+        "GUID:f9fc37449eca3a5418ec9cf3975eeb3d"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

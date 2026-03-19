@@ -3,253 +3,356 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public class FrustumCullingManager : MonoBehaviour
+public class OcclusionCullingManager : MonoBehaviour
 {
-    public static FrustumCullingManager Instance { get; private set; }
+    public static OcclusionCullingManager Instance { get; private set; }
 
     [Header("References")]
-    [SerializeField] ComputeShader _computeShader;
+    [SerializeField] private Shader _objectIDShader;
+    [SerializeField] private Camera _mainCamera;
 
     [Header("Settings")]
-    [SerializeField] bool _enabled = true;
-    [SerializeField] float _updateInterval = 0.05f;
-    [SerializeField] bool _debug = false;
-    
-    [Header("Dynamic Bounds")]
-    [SerializeField] bool _updateBoundsEveryFrame = true;
-    [Tooltip("Only update bounds when objects have moved (optimization)")]
-    [SerializeField] bool _onlyUpdateIfMoved = false;
+    [SerializeField] private bool _enabled = true;
+    [SerializeField] private int _idBufferResolution = 256;
+    [SerializeField] private float _updateInterval = 0.1f;
+    [SerializeField] private bool _debug = false;
 
-    private Camera _cam;
-    private List<MeshRenderer> _renderers = new();
-    private HashSet<MeshRenderer> _frustumVisibleSet = new();
-    private int _count = 0;
-    private bool _ready = false;
-    private bool _pending = false;
-    private float _lastUpdate = 0f;
-    private int _kernel;
-    private int _visible, _culled;
+    [Header("Hysteresis (Prevent Flickering)")]
+    [SerializeField] private bool _useHysteresis = true;
+    [SerializeField] private int _framesBeforeCulling = 2;
 
-    private GraphicsBuffer _aabbMinBuf;
-    private GraphicsBuffer _aabbMaxBuf;
-    private GraphicsBuffer _visibilityBuf;
+    [Header("Statistics")]
+    [SerializeField] private int _totalObjects = 0;
+    [SerializeField] private int _visibleAfterOcclusion = 0;
+    [SerializeField] private int _occlusionCulled = 0;
 
-    private Vector3[] _aabbMin;
-    private Vector3[] _aabbMax;
-    
-    // Track previous positions for movement detection
-    private Vector3[] _lastPositions;
-    private Quaternion[] _lastRotations;
-    private Vector3[] _lastScales;
+    // ID rendering
+    private RenderTexture _idRenderTexture;
+    private Material _idMaterial;
+    private CommandBuffer _idCommandBuffer;
+
+    // Object tracking
+    private List<MeshRenderer> _registeredRenderers = new List<MeshRenderer>();
+    private Dictionary<MeshRenderer, int> _rendererToID = new Dictionary<MeshRenderer, int>();
+    private Dictionary<int, MeshRenderer> _idToRenderer = new Dictionary<int, MeshRenderer>();
+
+    // Visibility tracking
+    private HashSet<int> _visibleIDs = new HashSet<int>();
+    private Dictionary<int, int> _invisibleFrameCount = new Dictionary<int, int>();
+
+    // Async readback
+    private bool _readbackPending = false;
+    private float _lastUpdateTime = 0f;
+
+    // Material property block for setting IDs
+    private MaterialPropertyBlock _propertyBlock;
+    private static readonly int ObjectIDProperty = Shader.PropertyToID("_ObjectID");
 
     void Awake()
     {
-        if (Instance == null) Instance = this;
-        else { Destroy(gameObject); return; }
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+            return;
+        }
     }
 
-    void OnEnable() => RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
-    void OnDisable() { RenderPipelineManager.endCameraRendering -= OnEndCameraRendering; ReleaseBuffers(); }
+    void OnEnable()
+    {
+        if (_mainCamera == null)
+            _mainCamera = Camera.main;
+
+        if (_objectIDShader == null)
+        {
+            Debug.LogError("[OcclusionCulling] ObjectID shader not assigned!");
+            return;
+        }
+
+        _idMaterial = new Material(_objectIDShader);
+        _propertyBlock = new MaterialPropertyBlock();
+
+        CreateIDRenderTexture();
+        CreateCommandBuffer();
+    }
+
+    void OnDisable()
+    {
+        ReleaseResources();
+    }
+
+    void OnDestroy()
+    {
+        ReleaseResources();
+    }
 
     public void RegisterRenderers(List<MeshRenderer> renderers)
     {
-        if (renderers == null || renderers.Count == 0) { Debug.LogWarning("[FrustumCulling] No renderers."); return; }
-        if (_computeShader == null) { Debug.LogError("[FrustumCulling] No compute shader."); return; }
-
-        _cam = Camera.main;
-        if (_cam == null) { Debug.LogError("[FrustumCulling] No main camera."); return; }
-
-        _renderers = renderers;
-        _count = renderers.Count;
-        _kernel = _computeShader.FindKernel("CSMain");
-
-        if (_kernel < 0) { Debug.LogError("[FrustumCulling] CSMain kernel not found."); return; }
-
-        InitializeArrays();
-        BakeAABBs();
-        AllocateBuffers();
-        _ready = true;
-
-        Debug.Log($"[FrustumCulling] Registered {_count} renderers. Kernel={_kernel}");
-    }
-
-    public bool IsFrustumVisible(MeshRenderer renderer)
-    {
-        return _frustumVisibleSet.Contains(renderer);
-    }
-
-    public HashSet<MeshRenderer> GetFrustumVisibleRenderers()
-    {
-        return _frustumVisibleSet;
-    }
-
-    private void InitializeArrays()
-    {
-        _aabbMin = new Vector3[_count];
-        _aabbMax = new Vector3[_count];
-        
-        if (_onlyUpdateIfMoved)
+        if (renderers == null || renderers.Count == 0)
         {
-            _lastPositions = new Vector3[_count];
-            _lastRotations = new Quaternion[_count];
-            _lastScales = new Vector3[_count];
+            Debug.LogWarning("[OcclusionCulling] No renderers to register.");
+            return;
+        }
+
+        _registeredRenderers.Clear();
+        _rendererToID.Clear();
+        _idToRenderer.Clear();
+        _invisibleFrameCount.Clear();
+
+        int idCounter = 1; // Start from 1 (0 = background)
+
+        foreach (var renderer in renderers)
+        {
+            if (renderer == null) continue;
+
+            _registeredRenderers.Add(renderer);
+            _rendererToID[renderer] = idCounter;
+            _idToRenderer[idCounter] = renderer;
+            _invisibleFrameCount[idCounter] = 0;
+
+            idCounter++;
+        }
+
+        _totalObjects = _registeredRenderers.Count;
+
+        Debug.Log($"[OcclusionCulling] Registered {_totalObjects} renderers. Max ID: {idCounter - 1}");
+
+        // Validate ID count
+        if (idCounter > 65535)
+        {
+            Debug.LogError("[OcclusionCulling] Too many objects! Limit is 65,535. Consider using R32 format.");
         }
     }
 
-    private void BakeAABBs()
+    void Update()
     {
-        for (int i = 0; i < _count; i++)
+        if (!_enabled || _registeredRenderers.Count == 0) return;
+
+        // Check if it's time to update
+        if (Time.time - _lastUpdateTime < _updateInterval) return;
+
+        // Don't start new readback if one is pending
+        if (_readbackPending) return;
+
+        _lastUpdateTime = Time.time;
+        RenderIDBuffer();
+    }
+
+    private void CreateIDRenderTexture()
+    {
+        if (_idRenderTexture != null)
+            _idRenderTexture.Release();
+
+        // Use RInt for 32-bit integer (can store large IDs)
+        _idRenderTexture = new RenderTexture(
+            _idBufferResolution,
+            _idBufferResolution,
+            24, // Depth buffer bits
+            RenderTextureFormat.RInt
+        );
+
+        _idRenderTexture.name = "ObjectID_RenderTexture";
+        _idRenderTexture.filterMode = FilterMode.Point;
+        _idRenderTexture.Create();
+    }
+
+    private void CreateCommandBuffer()
+    {
+        _idCommandBuffer = new CommandBuffer
         {
-            if (_renderers[i] == null) continue;
-            
-            Bounds b = _renderers[i].bounds;
-            _aabbMin[i] = b.min;
-            _aabbMax[i] = b.max;
-            
-            if (_onlyUpdateIfMoved)
+            name = "ObjectID Rendering"
+        };
+    }
+
+    private void RenderIDBuffer()
+    {
+        if (_mainCamera == null || _idRenderTexture == null) return;
+
+        _idCommandBuffer.Clear();
+
+        // Set render target
+        _idCommandBuffer.SetRenderTarget(_idRenderTexture);
+        _idCommandBuffer.ClearRenderTarget(true, true, Color.black);
+
+        // Setup camera matrices
+        _idCommandBuffer.SetViewProjectionMatrices(
+            _mainCamera.worldToCameraMatrix,
+            _mainCamera.projectionMatrix
+        );
+
+        // Render each object with its unique ID
+        foreach (var renderer in _registeredRenderers)
+        {
+            // 1. We ONLY check for null. 
+            // REMOVED: !renderer.enabled
+            if (renderer == null) continue;
+
+            // 2. We let the Frustum Manager dictate if we should test it for occlusion
+            if (FrustumCullingManager.Instance != null)
             {
-                Transform t = _renderers[i].transform;
-                _lastPositions[i] = t.position;
-                _lastRotations[i] = t.rotation;
-                _lastScales[i] = t.lossyScale;
+                // If it's outside the camera view, skip rendering it to the ID buffer entirely
+                if (!FrustumCullingManager.Instance.IsFrustumVisible(renderer))
+                    continue;
+            }
+
+            int objectID = _rendererToID[renderer];
+
+            // Set object ID in material
+            _propertyBlock.SetInt(ObjectIDProperty, objectID);
+
+            // Draw the mesh
+            MeshFilter meshFilter = renderer.GetComponent<MeshFilter>();
+            if (meshFilter != null && meshFilter.sharedMesh != null)
+            {
+                _idCommandBuffer.DrawMesh(
+                    meshFilter.sharedMesh,
+                    renderer.transform.localToWorldMatrix,
+                    _idMaterial,
+                    0, // submesh index
+                    0, // shader pass
+                    _propertyBlock
+                );
             }
         }
+
+        // Execute command buffer
+        Graphics.ExecuteCommandBuffer(_idCommandBuffer);
+
+        // Request async readback (don't specify texture format for RInt RenderTexture)
+        _readbackPending = true;
+        AsyncGPUReadback.Request(_idRenderTexture, 0, OnReadbackComplete);
     }
 
-    private void UpdateBounds()
+    private void OnReadbackComplete(AsyncGPUReadbackRequest request)
     {
-        bool anyUpdated = false;
-        
-        for (int i = 0; i < _count; i++)
+        _readbackPending = false;
+
+        if (request.hasError)
         {
-            if (_renderers[i] == null) continue;
-            
-            // Check if object has moved (optimization)
-            if (_onlyUpdateIfMoved)
+            Debug.LogWarning("[OcclusionCulling] Readback error.");
+            return;
+        }
+
+        // Process the ID buffer
+        ProcessIDBuffer(request.GetData<int>());
+    }
+
+    private void ProcessIDBuffer(NativeArray<int> idData)
+    {
+        // Clear previous visible set
+        _visibleIDs.Clear();
+
+        // Scan all pixels and collect unique IDs
+        for (int i = 0; i < idData.Length; i++)
+        {
+            int id = idData[i];
+            if (id > 0) // 0 is background
             {
-                Transform t = _renderers[i].transform;
-                bool hasMoved = t.position != _lastPositions[i] ||
-                               t.rotation != _lastRotations[i] ||
-                               t.lossyScale != _lastScales[i];
-                
-                if (!hasMoved) continue;
-                
-                _lastPositions[i] = t.position;
-                _lastRotations[i] = t.rotation;
-                _lastScales[i] = t.lossyScale;
+                _visibleIDs.Add(id);
             }
-            
-            // Update bounds
-            Bounds b = _renderers[i].bounds;
-            _aabbMin[i] = b.min;
-            _aabbMax[i] = b.max;
-            anyUpdated = true;
         }
-        
-        // Upload to GPU if any bounds changed
-        if (anyUpdated)
+
+        // Apply occlusion culling with optional hysteresis
+        ApplyOcclusionCulling();
+
+        if (_debug)
         {
-            _aabbMinBuf.SetData(_aabbMin);
-            _aabbMaxBuf.SetData(_aabbMax);
+            Debug.Log($"[OcclusionCulling] Visible IDs: {_visibleIDs.Count}/{_totalObjects}  Culled: {_occlusionCulled}");
         }
     }
 
-    private void AllocateBuffers()
+    private void ApplyOcclusionCulling()
     {
-        ReleaseBuffers();
-        _aabbMinBuf = new GraphicsBuffer(GraphicsBuffer.Target.Structured, _count, sizeof(float) * 3);
-        _aabbMaxBuf = new GraphicsBuffer(GraphicsBuffer.Target.Structured, _count, sizeof(float) * 3);
-        _visibilityBuf = new GraphicsBuffer(GraphicsBuffer.Target.Structured, _count, sizeof(int));
-        _aabbMinBuf.SetData(_aabbMin);
-        _aabbMaxBuf.SetData(_aabbMax);
-    }
+        _visibleAfterOcclusion = 0;
+        _occlusionCulled = 0;
 
-    private void ReleaseBuffers()
-    {
-        _aabbMinBuf?.Release(); _aabbMinBuf = null;
-        _aabbMaxBuf?.Release(); _aabbMaxBuf = null;
-        _visibilityBuf?.Release(); _visibilityBuf = null;
-        _ready = false;
-    }
-
-    private void OnEndCameraRendering(ScriptableRenderContext ctx, Camera cam)
-    {
-        if (!_enabled || !_ready || _pending) return;
-        if (cam != _cam) return;
-        if (cam.cameraType != CameraType.Game) return;
-        if (Time.time - _lastUpdate < _updateInterval) return;
-        _lastUpdate = Time.time;
-        
-        // Update bounds if enabled
-        if (_updateBoundsEveryFrame)
+        foreach (var kvp in _rendererToID)
         {
-            UpdateBounds();
-        }
-        
-        Dispatch();
-    }
+            MeshRenderer renderer = kvp.Key;
+            int objectID = kvp.Value;
 
-    private void Dispatch()
-    {
-        Plane[] planes = GeometryUtility.CalculateFrustumPlanes(_cam);
-        Vector4[] packed = new Vector4[6];
-        for (int i = 0; i < 6; i++)
-            packed[i] = new Vector4(planes[i].normal.x, planes[i].normal.y,
-                                    planes[i].normal.z, planes[i].distance);
+            if (renderer == null) continue;
 
-        _computeShader.SetVectorArray("_FrustumPlanes", packed);
-        _computeShader.SetInt("_Count", _count);
+            bool isVisibleInIDBuffer = _visibleIDs.Contains(objectID);
 
-        _computeShader.SetBuffer(_kernel, "_AABBMin", _aabbMinBuf);
-        _computeShader.SetBuffer(_kernel, "_AABBMax", _aabbMaxBuf);
-        _computeShader.SetBuffer(_kernel, "_Visibility", _visibilityBuf);
-
-        int groups = Mathf.CeilToInt(_count / 64f);
-        _computeShader.Dispatch(_kernel, groups, 1, 1);
-
-        _pending = true;
-        AsyncGPUReadback.Request(_visibilityBuf, OnReadback);
-    }
-
-    private void OnReadback(AsyncGPUReadbackRequest req)
-    {
-        _pending = false;
-        if (req.hasError) { Debug.LogWarning("[FrustumCulling] Readback error."); return; }
-
-        NativeArray<int> results = req.GetData<int>();
-        _visible = 0; _culled = 0;
-        _frustumVisibleSet.Clear();
-
-        for (int i = 0; i < _count; i++)
-        {
-            if (i >= _renderers.Count || _renderers[i] == null) continue;
-            bool vis = results[i] == 1;
-            
-            if (vis)
+            // NEW: Ask the Frustum manager if this is even in the camera view!
+            bool isFrustumVisible = true;
+            if (FrustumCullingManager.Instance != null)
             {
-                _renderers[i].enabled = true;
-                _frustumVisibleSet.Add(_renderers[i]);
-                _visible++;
+                isFrustumVisible = FrustumCullingManager.Instance.IsFrustumVisible(renderer);
+            }
+
+            // It is ONLY visible if it passed the ID check AND the Frustum check
+            bool finalVisibility = isVisibleInIDBuffer && isFrustumVisible;
+
+            // Apply your hysteresis logic using finalVisibility instead of just isVisibleInIDBuffer
+            if (_useHysteresis)
+            {
+                if (!finalVisibility)
+                {
+                    _invisibleFrameCount[objectID]++;
+                    if (_invisibleFrameCount[objectID] >= _framesBeforeCulling)
+                    {
+                        renderer.enabled = false; // Add your tracking from the previous fix here
+                        _occlusionCulled++;
+                    }
+                    // ...
+                }
+                else
+                {
+                    _invisibleFrameCount[objectID] = 0;
+                    renderer.enabled = true;
+                    _visibleAfterOcclusion++;
+                }
             }
             else
             {
-                _renderers[i].enabled = false;
-                _culled++;
+                // No hysteresis
+                renderer.enabled = finalVisibility;
             }
         }
+    }
+    private void ReleaseResources()
+    {
+        if (_idRenderTexture != null)
+        {
+            _idRenderTexture.Release();
+            _idRenderTexture = null;
+        }
 
-        if (_debug)
-            Debug.Log($"[FrustumCulling] Visible:{_visible}  Culled:{_culled}  Total:{_count}");
+        if (_idCommandBuffer != null)
+        {
+            _idCommandBuffer.Release();
+            _idCommandBuffer = null;
+        }
+
+        if (_idMaterial != null)
+        {
+            Destroy(_idMaterial);
+            _idMaterial = null;
+        }
     }
 
-    void OnDrawGizmosSelected()
+    // Debug visualization
+    void OnGUI()
     {
-        if (!_debug || _renderers == null) return;
-        foreach (var mr in _renderers)
+        if (!_debug) return;
+
+        GUILayout.BeginArea(new Rect(10, 100, 300, 200));
+        GUILayout.Label($"=== Occlusion Culling Stats ===");
+        GUILayout.Label($"Total Objects: {_totalObjects}");
+        GUILayout.Label($"Visible (After Occlusion): {_visibleAfterOcclusion}");
+        GUILayout.Label($"Occlusion Culled: {_occlusionCulled}");
+        GUILayout.Label($"Unique Visible IDs: {_visibleIDs.Count}");
+        GUILayout.EndArea();
+
+        // Show ID buffer preview
+        if (_idRenderTexture != null)
         {
-            if (mr == null) continue;
-            Gizmos.color = mr.enabled ? Color.green : Color.red;
-            Gizmos.DrawWireCube(mr.bounds.center, mr.bounds.size);
+            GUI.DrawTexture(new Rect(Screen.width - 264, 10, 256, 256), _idRenderTexture);
         }
     }
 }
