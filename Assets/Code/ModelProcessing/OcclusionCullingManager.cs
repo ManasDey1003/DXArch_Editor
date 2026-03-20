@@ -28,6 +28,7 @@ public class OcclusionCullingManager : MonoBehaviour
 
     // ID rendering
     private RenderTexture _idRenderTexture;
+    private Texture2D _debugTexture; // CPU-side texture for visualization
     private Material _idMaterial;
     private CommandBuffer _idCommandBuffer;
 
@@ -47,6 +48,10 @@ public class OcclusionCullingManager : MonoBehaviour
     // Material property block for setting IDs
     private MaterialPropertyBlock _propertyBlock;
     private static readonly int ObjectIDProperty = Shader.PropertyToID("_ObjectID");
+
+    // Debug info
+    private int _lastRenderedCount = 0;
+    private int _lastSkippedCount = 0;
 
     void Awake()
     {
@@ -74,6 +79,10 @@ public class OcclusionCullingManager : MonoBehaviour
 
         _idMaterial = new Material(_objectIDShader);
         _propertyBlock = new MaterialPropertyBlock();
+
+        // Create debug texture
+        _debugTexture = new Texture2D(_idBufferResolution, _idBufferResolution, TextureFormat.RGBA32, false);
+        _debugTexture.filterMode = FilterMode.Point;
 
         CreateIDRenderTexture();
         CreateCommandBuffer();
@@ -119,22 +128,14 @@ public class OcclusionCullingManager : MonoBehaviour
         _totalObjects = _registeredRenderers.Count;
 
         Debug.Log($"[OcclusionCulling] Registered {_totalObjects} renderers. Max ID: {idCounter - 1}");
-
-        // Validate ID count
-        if (idCounter > 65535)
-        {
-            Debug.LogError("[OcclusionCulling] Too many objects! Limit is 65,535. Consider using R32 format.");
-        }
     }
 
     void Update()
     {
         if (!_enabled || _registeredRenderers.Count == 0) return;
 
-        // Check if it's time to update
         if (Time.time - _lastUpdateTime < _updateInterval) return;
 
-        // Don't start new readback if one is pending
         if (_readbackPending) return;
 
         _lastUpdateTime = Time.time;
@@ -146,17 +147,18 @@ public class OcclusionCullingManager : MonoBehaviour
         if (_idRenderTexture != null)
             _idRenderTexture.Release();
 
-        // Use RInt for 32-bit integer (can store large IDs)
         _idRenderTexture = new RenderTexture(
             _idBufferResolution,
             _idBufferResolution,
-            24, // Depth buffer bits
+            24,
             RenderTextureFormat.RInt
         );
 
         _idRenderTexture.name = "ObjectID_RenderTexture";
         _idRenderTexture.filterMode = FilterMode.Point;
-        _idRenderTexture.Create();
+        bool created = _idRenderTexture.Create();
+
+        Debug.Log($"[OcclusionCulling] RenderTexture created: {created}, IsCreated: {_idRenderTexture.IsCreated()}");
     }
 
     private void CreateCommandBuffer()
@@ -169,59 +171,73 @@ public class OcclusionCullingManager : MonoBehaviour
 
     private void RenderIDBuffer()
     {
-        if (_mainCamera == null || _idRenderTexture == null) return;
+        if (_mainCamera == null || _idRenderTexture == null)
+        {
+            Debug.LogError("[OcclusionCulling] Camera or RenderTexture is null!");
+            return;
+        }
 
         _idCommandBuffer.Clear();
 
-        // Set render target
         _idCommandBuffer.SetRenderTarget(_idRenderTexture);
         _idCommandBuffer.ClearRenderTarget(true, true, Color.black);
 
-        // Setup camera matrices
         _idCommandBuffer.SetViewProjectionMatrices(
             _mainCamera.worldToCameraMatrix,
             _mainCamera.projectionMatrix
         );
 
-        // Render each object with its unique ID
+        int renderedCount = 0;
+        int skippedCount = 0;
+        int nullMeshCount = 0;
+        int frustumCulledCount = 0;
+
         foreach (var renderer in _registeredRenderers)
         {
-            // 1. We ONLY check for null. 
-            // REMOVED: !renderer.enabled
-            if (renderer == null) continue;
+            if (renderer == null)
+            {
+                skippedCount++;
+                continue;
+            }
 
-            // 2. We let the Frustum Manager dictate if we should test it for occlusion
+            // Check frustum visibility
             if (FrustumCullingManager.Instance != null)
             {
-                // If it's outside the camera view, skip rendering it to the ID buffer entirely
                 if (!FrustumCullingManager.Instance.IsFrustumVisible(renderer))
+                {
+                    frustumCulledCount++;
                     continue;
+                }
             }
 
             int objectID = _rendererToID[renderer];
-
-            // Set object ID in material
             _propertyBlock.SetInt(ObjectIDProperty, objectID);
 
-            // Draw the mesh
             MeshFilter meshFilter = renderer.GetComponent<MeshFilter>();
-            if (meshFilter != null && meshFilter.sharedMesh != null)
+            if (meshFilter == null || meshFilter.sharedMesh == null)
             {
-                _idCommandBuffer.DrawMesh(
-                    meshFilter.sharedMesh,
-                    renderer.transform.localToWorldMatrix,
-                    _idMaterial,
-                    0, // submesh index
-                    0, // shader pass
-                    _propertyBlock
-                );
+                nullMeshCount++;
+                continue;
             }
+
+            _idCommandBuffer.DrawMesh(
+                meshFilter.sharedMesh,
+                renderer.transform.localToWorldMatrix,
+                _idMaterial,
+                0,
+                0,
+                _propertyBlock
+            );
+            renderedCount++;
         }
 
-        // Execute command buffer
+        _lastRenderedCount = renderedCount;
+        _lastSkippedCount = frustumCulledCount;
+
         Graphics.ExecuteCommandBuffer(_idCommandBuffer);
 
-        // Request async readback (don't specify texture format for RInt RenderTexture)
+        Debug.Log($"[OcclusionCulling] DrawMesh called {renderedCount} times. Frustum culled: {frustumCulledCount}, Null meshes: {nullMeshCount}");
+
         _readbackPending = true;
         AsyncGPUReadback.Request(_idRenderTexture, 0, OnReadbackComplete);
     }
@@ -232,36 +248,74 @@ public class OcclusionCullingManager : MonoBehaviour
 
         if (request.hasError)
         {
-            Debug.LogWarning("[OcclusionCulling] Readback error.");
+            Debug.LogError("[OcclusionCulling] Readback error!");
             return;
         }
 
-        // Process the ID buffer
-        ProcessIDBuffer(request.GetData<int>());
+        NativeArray<int> idData = request.GetData<int>();
+        
+        // Count non-zero pixels for debugging
+        int nonZeroPixels = 0;
+        int maxID = 0;
+        for (int i = 0; i < idData.Length; i++)
+        {
+            if (idData[i] > 0)
+            {
+                nonZeroPixels++;
+                maxID = Mathf.Max(maxID, idData[i]);
+            }
+        }
+
+        Debug.Log($"[OcclusionCulling] Readback complete. Non-zero pixels: {nonZeroPixels}/{idData.Length}, Max ID found: {maxID}");
+
+        // Update debug texture
+        if (_debug)
+        {
+            UpdateDebugTexture(idData);
+        }
+
+        ProcessIDBuffer(idData);
+    }
+
+    private void UpdateDebugTexture(NativeArray<int> idData)
+    {
+        Color32[] pixels = new Color32[_idBufferResolution * _idBufferResolution];
+        
+        for (int i = 0; i < idData.Length; i++)
+        {
+            int id = idData[i];
+            
+            if (id == 0)
+            {
+                pixels[i] = new Color32(0, 0, 0, 255); // Black for background
+            }
+            else
+            {
+                // Convert ID to a visible color using HSV
+                float hue = (id % 360) / 360f;
+                Color color = Color.HSVToRGB(hue, 1f, 1f);
+                pixels[i] = color;
+            }
+        }
+        
+        _debugTexture.SetPixels32(pixels);
+        _debugTexture.Apply();
     }
 
     private void ProcessIDBuffer(NativeArray<int> idData)
     {
-        // Clear previous visible set
         _visibleIDs.Clear();
 
-        // Scan all pixels and collect unique IDs
         for (int i = 0; i < idData.Length; i++)
         {
             int id = idData[i];
-            if (id > 0) // 0 is background
+            if (id > 0)
             {
                 _visibleIDs.Add(id);
             }
         }
 
-        // Apply occlusion culling with optional hysteresis
         ApplyOcclusionCulling();
-
-        if (_debug)
-        {
-            Debug.Log($"[OcclusionCulling] Visible IDs: {_visibleIDs.Count}/{_totalObjects}  Culled: {_occlusionCulled}");
-        }
     }
 
     private void ApplyOcclusionCulling()
@@ -278,17 +332,14 @@ public class OcclusionCullingManager : MonoBehaviour
 
             bool isVisibleInIDBuffer = _visibleIDs.Contains(objectID);
 
-            // NEW: Ask the Frustum manager if this is even in the camera view!
             bool isFrustumVisible = true;
             if (FrustumCullingManager.Instance != null)
             {
                 isFrustumVisible = FrustumCullingManager.Instance.IsFrustumVisible(renderer);
             }
 
-            // It is ONLY visible if it passed the ID check AND the Frustum check
             bool finalVisibility = isVisibleInIDBuffer && isFrustumVisible;
 
-            // Apply your hysteresis logic using finalVisibility instead of just isVisibleInIDBuffer
             if (_useHysteresis)
             {
                 if (!finalVisibility)
@@ -296,10 +347,9 @@ public class OcclusionCullingManager : MonoBehaviour
                     _invisibleFrameCount[objectID]++;
                     if (_invisibleFrameCount[objectID] >= _framesBeforeCulling)
                     {
-                        renderer.enabled = false; // Add your tracking from the previous fix here
+                        renderer.enabled = false;
                         _occlusionCulled++;
                     }
-                    // ...
                 }
                 else
                 {
@@ -310,11 +360,15 @@ public class OcclusionCullingManager : MonoBehaviour
             }
             else
             {
-                // No hysteresis
                 renderer.enabled = finalVisibility;
+                if (finalVisibility)
+                    _visibleAfterOcclusion++;
+                else
+                    _occlusionCulled++;
             }
         }
     }
+
     private void ReleaseResources()
     {
         if (_idRenderTexture != null)
@@ -334,25 +388,40 @@ public class OcclusionCullingManager : MonoBehaviour
             Destroy(_idMaterial);
             _idMaterial = null;
         }
+
+        if (_debugTexture != null)
+        {
+            Destroy(_debugTexture);
+            _debugTexture = null;
+        }
     }
 
-    // Debug visualization
     void OnGUI()
     {
         if (!_debug) return;
 
-        GUILayout.BeginArea(new Rect(10, 100, 300, 200));
-        GUILayout.Label($"=== Occlusion Culling Stats ===");
-        GUILayout.Label($"Total Objects: {_totalObjects}");
-        GUILayout.Label($"Visible (After Occlusion): {_visibleAfterOcclusion}");
+        // Stats panel
+        GUILayout.BeginArea(new Rect(10, 10, 350, 300));
+        GUILayout.Box("=== Occlusion Culling Debug ===");
+        GUILayout.Label($"Total Registered: {_totalObjects}");
+        GUILayout.Label($"Last Render Call: {_lastRenderedCount} objects");
+        GUILayout.Label($"Frustum Culled: {_lastSkippedCount}");
+        GUILayout.Label($"Visible IDs Found: {_visibleIDs.Count}");
+        GUILayout.Label($"Visible After Occlusion: {_visibleAfterOcclusion}");
         GUILayout.Label($"Occlusion Culled: {_occlusionCulled}");
-        GUILayout.Label($"Unique Visible IDs: {_visibleIDs.Count}");
+        GUILayout.Label($"Readback Pending: {_readbackPending}");
+        GUILayout.Label($"");
+        GUILayout.Label($"Camera: {(_mainCamera != null ? _mainCamera.name : "NULL")}");
+        GUILayout.Label($"RenderTexture: {(_idRenderTexture != null && _idRenderTexture.IsCreated() ? "OK" : "FAILED")}");
+        GUILayout.Label($"Material: {(_idMaterial != null ? "OK" : "NULL")}");
         GUILayout.EndArea();
 
-        // Show ID buffer preview
-        if (_idRenderTexture != null)
+        // Show debug texture
+        if (_debugTexture != null)
         {
-            GUI.DrawTexture(new Rect(Screen.width - 264, 10, 256, 256), _idRenderTexture);
+            int size = 256;
+            GUI.Box(new Rect(Screen.width - size - 12, 10, size + 4, size + 24), "ID Buffer Visualization");
+            GUI.DrawTexture(new Rect(Screen.width - size - 10, 32, size, size), _debugTexture);
         }
     }
 }
