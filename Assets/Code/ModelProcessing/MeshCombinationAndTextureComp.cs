@@ -208,7 +208,7 @@ public static class MeshCombinationAndTextureComp
 
         private async Task SimplifyTexturesByMeshSizeAsync(GameObject targetModel, Action<float> onProgress = null)
         {
-            MeshRenderer[] renderers = targetModel.GetComponentsInChildren<MeshRenderer>();
+            MeshRenderer[] renderers = targetModel.GetComponentsInChildren<MeshRenderer>(true);
             int simplifiedCount = 0, skippedCount = 0;
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -497,7 +497,7 @@ public static class MeshCombinationAndTextureComp
 
         private async Task CombineMeshesByMaterialAsync(GameObject targetModel, Action<float> onProgress = null)
         {
-            MeshFilter[] meshFilters = targetModel.GetComponentsInChildren<MeshFilter>();
+            MeshFilter[] meshFilters = targetModel.GetComponentsInChildren<MeshFilter>(true);
             if (meshFilters.Length == 0) { onProgress?.Invoke(1f); return; }
 
             var materialGroups = new Dictionary<Material, List<CombineInstance>>();

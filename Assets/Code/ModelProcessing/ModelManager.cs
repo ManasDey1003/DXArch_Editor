@@ -1,5 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
+using System.Collections;
+using UnityEngine.UI;
+
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -11,7 +15,7 @@ public class ModelManager : MonoBehaviour
     [SerializeField] GLBModelImporter _importer;
     [SerializeField] MeshFilteration _meshFilteration;
     [SerializeField] GameObject _currentModel;
-    [SerializeField] OctreeHierarchyBuilder _octreeBuilder;
+    // [SerializeField] OctreeHierarchyBuilder _octreeBuilder;
     [SerializeField] TestExport _testExport;
 
 
@@ -22,8 +26,8 @@ public class ModelManager : MonoBehaviour
     [SerializeField] bool _loadModelOnStart = false;
     [SerializeField] bool _shouldFilterMesh = true;
     [SerializeField] bool _combineMeshesAndTextures = true;
-    [SerializeField] bool _optimizeForOcclusionCulling = true;
-    [SerializeField]private bool _enableOcclusionCulling = true;
+    // [SerializeField] bool _optimizeForOcclusionCulling = true;
+    [SerializeField] private bool _enableOcclusionCulling = true;
 
     private MeshCombinationAndTextureComp.ModelOptimizer _optimizer;
     private string _originalModelName;
@@ -89,21 +93,21 @@ public class ModelManager : MonoBehaviour
     {
         if (_currentModel == null) return;
 
-        if (_optimizeForOcclusionCulling)
-        {
-            // Build octree hierarchy
-            if (_octreeBuilder != null)
-            {
-                _octreeBuilder.RootModel = _currentModel;
-                _octreeBuilder.BuildOctreeHierarchy();
+        // if (_optimizeForOcclusionCulling)
+        // {
+        //     // Build octree hierarchy
+        //     if (_octreeBuilder != null)
+        //     {
+        //         _octreeBuilder.RootModel = _currentModel;
+        //         _octreeBuilder.BuildOctreeHierarchy();
 
-                Debug.Log("[ModelManager] Octree built.");
-            }
-            else
-            {
-                Debug.LogWarning("[ModelManager] OctreeHierarchyBuilder reference is missing.");
-            }
-        }
+        //         Debug.Log("[ModelManager] Octree built.");
+        //     }
+        //     else
+        //     {
+        //         Debug.LogWarning("[ModelManager] OctreeHierarchyBuilder reference is missing.");
+        //     }
+        // }
 
         // Register renderers with culling systems
         List<MeshRenderer> renderers = _optimizer?.GetCombinedRenderers();
@@ -121,6 +125,20 @@ public class ModelManager : MonoBehaviour
             {
                 OcclusionCullingManager.Instance.RegisterRenderers(renderers);
                 Debug.Log($"[ModelManager] Registered {renderers.Count} renderers with OcclusionCullingManager.");
+            }
+
+            foreach (var renderer in renderers)
+            {
+                // Ensure the renderer's GameObject is on the correct layer for occlusion culling
+                renderer.gameObject.layer = LayerMask.NameToLayer("Pickable");
+                renderer.gameObject.AddComponent<MeshCollider>();
+                Outline outline = renderer.gameObject.AddComponent<Outline>();
+                outline.OutlineMode = Outline.Mode.OutlineAll;
+                outline.OutlineColor = Color.red;
+                outline.OutlineWidth = 5f;
+                outline.enabled = false; // Start with outline disabled
+
+
             }
         }
     }
@@ -209,6 +227,97 @@ public class ModelManager : MonoBehaviour
         Debug.Log($"[ModelManager] Exported '{_currentModel.name}' to: {path}");
     }
 
+
+    /// <summary>
+    /// Coroutine that processes the model (filtration + optimization) and exports it when complete
+    /// </summary>
+    /// <param name="exportPath">Path where the model should be exported</param>
+    public IEnumerator ProcessAndExportModel(string exportPath)
+    {
+        if (_currentModel == null)
+        {
+            Debug.LogError("[ModelManager] No model loaded to process and export.");
+            yield break;
+        }
+
+        Debug.Log("[ModelManager] Starting model processing and export...");
+
+        // Step 1: Filter mesh if enabled
+        // if (_shouldFilterMesh)
+        {
+            _currentModel = _meshFilteration.FilterSmallMeshes(_currentModel);
+            Debug.Log("[ModelManager] Mesh filtration complete.");
+        }
+
+        // Step 2: Combine meshes and textures
+        _optimizer = new MeshCombinationAndTextureComp.ModelOptimizer();
+        _optimizer.combineMeshes = true;
+
+        // Flag to track async completion
+        bool optimizationComplete = false;
+
+        // Start the async optimization
+        var optimizationTask = _optimizer.ApplyOptimizationsAsync(_currentModel, progress =>
+        {
+            Debug.Log($"Optimization progress: {progress * 100f:F2}%");
+        });
+
+        // Continue the task and set flag when done
+        optimizationTask.ContinueWith(task =>
+        {
+            optimizationComplete = true;
+        });
+
+        // Step 3: Wait for optimization to complete
+        while (!optimizationComplete)
+        {
+            yield return null; // Wait one frame
+        }
+
+        Debug.Log("[ModelManager] Mesh optimization complete.");
+
+        // Re-apply depth mode in case it was set before optimization
+        _optimizer.SetDepthColorMode(false);
+
+        // Rebuild hierarchy (frustum culling, occlusion culling, etc.)
+        RebuildHierarchy();
+
+        Debug.Log("[ModelManager] Hierarchy rebuilt.");
+
+        // Step 4: Export the model
+        if (_testExport == null)
+        {
+            Debug.LogError("[ModelManager] TestExport reference is missing. Cannot export.");
+            yield break;
+        }
+
+        _testExport.exportRoot = new GameObject[] { _currentModel };
+        _testExport.path = exportPath;
+        _testExport.AdvancedExport();
+
+        Debug.Log($"[ModelManager] Export complete: '{_currentModel.name}' saved to {exportPath}");
+    }
+
+    /// <summary>
+    /// Convenience method to process and export with file dialog
+    /// </summary>
+
+
+    [ContextMenu("Process and Export with Dialog")]
+    public void ProcessAndExportWithDialog()
+    {
+        string exportPath = OpenSaveFileDialog();
+
+        if (string.IsNullOrEmpty(exportPath))
+        {
+            Debug.Log("[ModelManager] Export cancelled by user.");
+            return;
+        }
+
+        StartCoroutine(ProcessAndExportModel(exportPath));
+    }
+
+
     // ── Unity lifecycle ─────────────────────────────────────────────────────
     void Awake()
     {
@@ -217,7 +326,7 @@ public class ModelManager : MonoBehaviour
 
         _importer = GetComponent<GLBModelImporter>();
         _meshFilteration = GetComponent<MeshFilteration>();
-        _octreeBuilder = GetComponent<OctreeHierarchyBuilder>();
+        // _octreeBuilder = GetComponent<OctreeHierarchyBuilder>();
         _testExport = GetComponent<TestExport>();
     }
 
