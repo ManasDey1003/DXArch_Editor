@@ -8,8 +8,8 @@ public static class MeshCombinationAndTextureComp
     public class ModelOptimizer
     {
         public bool combineMeshes = true;
-        public int maxVerticesPerMesh = 65000;
-        public float spatialClusterRadius = 25f;
+        public int maxVerticesPerMesh = 25000;
+        public float spatialClusterRadius = 15f;
         public bool simplifyTexturesBySize = true;
         public float largeMeshThreshold = 0;
         public bool simplifyBeforeCombining = true;
@@ -67,7 +67,7 @@ public static class MeshCombinationAndTextureComp
         //  Public entry points
         // ------------------------------------------------------------------
         public List<MeshRenderer> GetCombinedRenderers() => combinedRenderers;
-        
+
         public void ApplyOptimizations(GameObject model)
         {
             combinedRenderers.Clear();
@@ -119,7 +119,7 @@ public static class MeshCombinationAndTextureComp
             if (doSimplifyBefore) totalSteps++;
             if (doCombine) totalSteps += 3;
             else totalSteps++; // Add a step for gathering existing renderers
-            
+
             if (doSimplifyAfter) totalSteps++;
 
             if (totalSteps == 0) { onProgress?.Invoke(1f); return; }
@@ -261,7 +261,7 @@ public static class MeshCombinationAndTextureComp
             return Mathf.Sqrt(dr * dr + dg * dg + db * db + da * da);
         }
 
-        private Material FindSimilarCachedMaterial(Shader shader, Color targetColor, float threshold = 0.05f)
+        private Material FindSimilarCachedMaterial(Shader shader, Color targetColor, float threshold = 0.025f)
         {
             foreach (var kvp in simplifiedMaterialCache)
             {

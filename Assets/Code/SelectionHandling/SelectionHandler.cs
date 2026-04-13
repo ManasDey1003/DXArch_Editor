@@ -18,7 +18,7 @@ public class SelectionHandler : MonoBehaviour
 
     //private HashSet<GameObject> _selectedObjects = new();
 
-    public List<GameObject> CurrentSelectedObject
+    public List<GameObject> CurrentSelectedObjects
     {
         get => _currentSelectedObjects;
         set
@@ -103,7 +103,7 @@ public class SelectionHandler : MonoBehaviour
         }
 
         MeshSelection.AddObjects(hits, IsMultiSelect);
-        SelectionHandler.Instance.CurrentSelectedObject = hits;
+        SelectionHandler.Instance.CurrentSelectedObjects = hits;
     }
 
 }
@@ -119,13 +119,13 @@ public static class MeshSelection
             if (_objects.Contains(go) && _objects.Count == 1)
             {
                 ClearAllObjects();
-                SelectionHandler.Instance.CurrentSelectedObject = null;
+                SelectionHandler.Instance.CurrentSelectedObjects = null;
             }
             else
             {
                 ClearAllObjects();
                 AddWithOutline(go);
-                SelectionHandler.Instance.CurrentSelectedObject = new List<GameObject> { go };
+                SelectionHandler.Instance.CurrentSelectedObjects = new List<GameObject> { go };
             }
         }
         else
@@ -133,12 +133,12 @@ public static class MeshSelection
             if (_objects.Contains(go))
             {
                 Remove(go);
-                SelectionHandler.Instance.CurrentSelectedObject.Remove(go);
+                SelectionHandler.Instance.CurrentSelectedObjects.Remove(go);
             }
             else
             {
                 AddWithOutline(go);
-                SelectionHandler.Instance.CurrentSelectedObject.Add(go);
+                SelectionHandler.Instance.CurrentSelectedObjects.Add(go);
             }
         }
     }
@@ -151,7 +151,10 @@ public static class MeshSelection
         foreach (var go in objects)
         {
             if (!_objects.Contains(go))
+            {
                 AddWithOutline(go);
+                // SelectionHandler.Instance.CurrentSelectedObjects.Add(go);
+            }
         }
     }
 
@@ -163,7 +166,7 @@ public static class MeshSelection
             ManipulateOutline(go, false);
         }
         _objects.Clear();
-        SelectionHandler.Instance.CurrentSelectedObject = null;
+        SelectionHandler.Instance.CurrentSelectedObjects = null;
     }
 
     private static void AddWithOutline(GameObject go)

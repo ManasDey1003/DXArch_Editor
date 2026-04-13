@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
+using AlligUtils;
+
 
 
 #if UNITY_EDITOR
@@ -64,10 +66,13 @@ public class ModelManager : MonoBehaviour
             {
                 // Always call this so we can extract the renderers for occlusion
                 // and apply depth colors, even if combination is false.
+
                 CombineMeshFunc();
             }
         }
     }
+
+    public bool AddMeshCollider;
 
     private async void CombineMeshFunc()
     {
@@ -76,6 +81,7 @@ public class ModelManager : MonoBehaviour
 
         // Pass the inspector toggle into the optimizer
         _optimizer.combineMeshes = _combineMeshesAndTextures;
+        _optimizer.simplifyTexturesBySize = false; // Disable texture simplification by size
 
         await _optimizer.ApplyOptimizationsAsync(_currentModel, progress =>
         {
@@ -127,16 +133,19 @@ public class ModelManager : MonoBehaviour
                 Debug.Log($"[ModelManager] Registered {renderers.Count} renderers with OcclusionCullingManager.");
             }
 
-            foreach (var renderer in renderers)
+            if (AddMeshCollider)
             {
                 // Ensure the renderer's GameObject is on the correct layer for occlusion culling
-                renderer.gameObject.layer = LayerMask.NameToLayer("Pickable");
-                renderer.gameObject.AddComponent<MeshCollider>();
-                Outline outline = renderer.gameObject.AddComponent<Outline>();
-                outline.OutlineMode = Outline.Mode.OutlineAll;
-                outline.OutlineColor = Color.red;
-                outline.OutlineWidth = 5f;
-                outline.enabled = false; // Start with outline disabled
+                foreach (var renderer in renderers)
+                {
+                    renderer.gameObject.layer = LayerMask.NameToLayer("Pickable");
+                    renderer.gameObject.AddComponent<MeshCollider>();
+                    Outline outline = renderer.gameObject.AddComponent<Outline>();
+                    outline.OutlineMode = Outline.Mode.OutlineAll;
+                    outline.OutlineColor = Color.red;
+                    outline.OutlineWidth = 5f;
+                    outline.enabled = false; // Start with outline disabled
+                }
 
 
             }
@@ -144,6 +153,7 @@ public class ModelManager : MonoBehaviour
     }
 
     // ── Export functionality ────────────────────────────────────────────────
+
     [ContextMenu("Export Model")]
     public void ExportModel()
     {
@@ -155,7 +165,7 @@ public class ModelManager : MonoBehaviour
 
         if (_testExport == null)
         {
-            Debug.LogError("[ModelManager] TestExport reference is missing. Assign it in the inspector.");
+            Debug.LogError("[ModelManager] TestExport reference is missing.");
             return;
         }
 
@@ -167,14 +177,13 @@ public class ModelManager : MonoBehaviour
             return;
         }
 
-        // Configure TestExport
-        _testExport.exportRoot = new GameObject[] { _currentModel };
+        _testExport.exportRoot = new GameObject[] { _currentModel.transform.GetChildWithName("CombinedMeshes").gameObject ?? _currentModel };
         _testExport.path = exportPath;
 
-        // Trigger export
-        _testExport.AdvancedExport();
+        // Use chunked export instead
+        _testExport.ExportInChunks();
 
-        Debug.Log($"[ModelManager] Initiated export of '{_currentModel.name}' to: {exportPath}");
+        Debug.Log($"[ModelManager] Initiated chunked export of '{_currentModel.name}'");
     }
 
     private string OpenSaveFileDialog()
@@ -291,9 +300,12 @@ public class ModelManager : MonoBehaviour
             yield break;
         }
 
-        _testExport.exportRoot = new GameObject[] { _currentModel };
+        _testExport.exportRoot = new GameObject[] { _currentModel.transform.GetChildWithName("CombinedMeshes").gameObject ?? _currentModel };
         _testExport.path = exportPath;
-        _testExport.AdvancedExport();
+        // _testExport.AdvancedExport();
+
+        // _testExport.exportRoot = new GameObject[] { _currentModel.transform.GetChildWithName("CombinedMeshes").gameObject ?? _currentModel };
+        _testExport.ExportInChunks();
 
         Debug.Log($"[ModelManager] Export complete: '{_currentModel.name}' saved to {exportPath}");
     }
